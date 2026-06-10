@@ -30,23 +30,31 @@
      <p id="subtitle-text" class="text-pink-300 text-lg">4 photos • 10 seconds apart • Choose your frame!</p>
     </div><button onclick="startBooth()" class="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xl font-semibold rounded-full hover:scale-105 transition-transform shadow-lg shadow-pink-500/40"> <i data-lucide="sparkles" class="w-5 h-5 inline mr-2"></i>Start Photobooth </button>
     <p class="text-gray-400 text-sm mt-4">✨ Multiple guests can use the booth one after another!</p>
-    <div class="mt-8 pt-6 border-t border-white/20">
-     <p class="text-white font-semibold mb-4">Upload Custom Frame Overlays</p>
+    <div id="frame-management-section" class="mt-8 pt-6 border-t border-white/20">
+     <p class="text-white font-semibold mb-4">Frame Management</p>
+     <div id="frames-status" class="text-gray-300 text-sm mb-4">
+      <p id="frames-count">No custom frames uploaded yet</p>
+     </div>
      <div class="flex flex-col gap-3 max-w-md mx-auto">
-      <div class="flex items-center gap-2">
-       <label class="text-white text-sm">Frame 1:</label>
-       <input type="file" id="frame-upload-1" accept="image/*" onchange="uploadFrame(1)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
-      </div>
-      <div class="flex items-center gap-2">
-       <label class="text-white text-sm">Frame 2:</label>
-       <input type="file" id="frame-upload-2" accept="image/*" onchange="uploadFrame(2)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
-      </div>
-      <div class="flex items-center gap-2">
-       <label class="text-white text-sm">Frame 3:</label>
-       <input type="file" id="frame-upload-3" accept="image/*" onchange="uploadFrame(3)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+      <button onclick="toggleFrameUpload()" id="toggle-upload-btn" class="px-6 py-2 bg-pink-500/30 text-pink-300 rounded-full hover:bg-pink-500/50 transition font-medium">
+        <i data-lucide="upload" class="w-4 h-4 inline mr-2"></i>Upload New Frames
+      </button>
+      <div id="frame-upload-section" class="hidden space-y-3 bg-white/5 p-4 rounded-xl">
+       <div class="flex items-center gap-2">
+        <label class="text-white text-sm">Frame 1:</label>
+        <input type="file" id="frame-upload-1" accept="image/*" onchange="uploadFrame(1)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+       </div>
+       <div class="flex items-center gap-2">
+        <label class="text-white text-sm">Frame 2:</label>
+        <input type="file" id="frame-upload-2" accept="image/*" onchange="uploadFrame(2)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+       </div>
+       <div class="flex items-center gap-2">
+        <label class="text-white text-sm">Frame 3:</label>
+        <input type="file" id="frame-upload-3" accept="image/*" onchange="uploadFrame(3)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+       </div>
+       <button onclick="clearFrames()" class="w-full px-4 py-2 text-sm bg-red-500/30 text-red-300 rounded-full hover:bg-red-500/50 transition">Clear All Uploads</button>
       </div>
      </div>
-     <button onclick="clearFrames()" class="mt-3 px-4 py-2 text-sm bg-white/10 text-white rounded-full hover:bg-white/20 transition">Clear All Uploads</button>
     </div>
    </div><!-- Camera Screen -->
    <div id="screen-camera" class="hidden text-center w-full max-w-2xl">
@@ -133,6 +141,7 @@
     if (saved) {
       try {
         customFrames = JSON.parse(saved);
+        updateFramesStatus();
       } catch (e) {
         console.error('Failed to load saved frames:', e);
       }
@@ -142,6 +151,34 @@
   // Save frames to localStorage
   function saveFrames() {
     localStorage.setItem('photoboothFrames', JSON.stringify(customFrames));
+    updateFramesStatus();
+  }
+
+  // Update the frame status display
+  function updateFramesStatus() {
+    const uploadedCount = customFrames.filter(f => f.url).length;
+    const statusEl = document.getElementById('frames-count');
+    if (uploadedCount === 0) {
+      statusEl.textContent = 'No custom frames uploaded yet';
+    } else {
+      statusEl.textContent = `✅ ${uploadedCount} custom frame${uploadedCount !== 1 ? 's' : ''} ready to use`;
+    }
+  }
+
+  // Toggle the upload section visibility
+  function toggleFrameUpload() {
+    const section = document.getElementById('frame-upload-section');
+    const btn = document.getElementById('toggle-upload-btn');
+    const isHidden = section.classList.contains('hidden');
+    
+    if (isHidden) {
+      section.classList.remove('hidden');
+      btn.innerHTML = '<i data-lucide="x" class="w-4 h-4 inline mr-2"></i>Close';
+    } else {
+      section.classList.add('hidden');
+      btn.innerHTML = '<i data-lucide="upload" class="w-4 h-4 inline mr-2"></i>Upload New Frames';
+    }
+    lucide.createIcons();
   }
 
   function uploadFrame(frameIndex) {
@@ -193,6 +230,7 @@
       document.getElementById('frame-upload-2').value = '';
       document.getElementById('frame-upload-3').value = '';
       saveFrames();
+      toggleFrameUpload(); // Close the upload section
     }
   }
 
@@ -203,15 +241,15 @@
     if (readyMsg) readyMsg.textContent = config.countdown_message || defaultConfig.countdown_message;
 
     customFrames[0] = { 
-      url: config.frame1_url || defaultConfig.frame1_url, 
+      url: config.frame1_url || customFrames[0].url || defaultConfig.frame1_url, 
       name: config.frame1_name || defaultConfig.frame1_name 
     };
     customFrames[1] = { 
-      url: config.frame2_url || defaultConfig.frame2_url, 
+      url: config.frame2_url || customFrames[1].url || defaultConfig.frame2_url, 
       name: config.frame2_name || defaultConfig.frame2_name 
     };
     customFrames[2] = { 
-      url: config.frame3_url || defaultConfig.frame3_url, 
+      url: config.frame3_url || customFrames[2].url || defaultConfig.frame3_url, 
       name: config.frame3_name || defaultConfig.frame3_name 
     };
 
