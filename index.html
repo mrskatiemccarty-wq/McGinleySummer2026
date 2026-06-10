@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Party Photobooth</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Fredoka', sans-serif; }
+    @keyframes flash { 0%,100%{opacity:0} 50%{opacity:1} }
+    .flash-overlay { animation: flash 0.3s ease-out; }
+    @keyframes pulse-ring { 0%{transform:scale(0.8);opacity:1} 100%{transform:scale(1.4);opacity:0} }
+    .pulse-ring { animation: pulse-ring 1s ease-out infinite; }
+    @keyframes countdown-pop { 0%{transform:scale(0.5);opacity:0} 50%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
+    .countdown-pop { animation: countdown-pop 0.5s ease-out; }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col items-center justify-center p-4">
+   <!-- Start Screen -->
+   <div id="screen-start" class="text-center">
+    <div class="mb-6">
+     <div class="w-24 h-24 mx-auto bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-pink-500/30">
+      <i data-lucide="camera" class="w-12 h-12 text-white"></i>
+     </div>
+     <h1 id="title-text" class="text-4xl md:text-5xl font-bold text-white mb-2">Party Photobooth</h1>
+     <p id="subtitle-text" class="text-pink-300 text-lg">4 photos • 30 seconds apart • Choose your frame!</p>
+    </div><button onclick="startBooth()" class="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xl font-semibold rounded-full hover:scale-105 transition-transform shadow-lg shadow-pink-500/40"> <i data-lucide="sparkles" class="w-5 h-5 inline mr-2"></i>Start Photobooth </button>
+    <p class="text-gray-400 text-sm mt-4">✨ Multiple guests can use the booth one after another!</p>
+   </div><!-- Camera Screen -->
+   <div id="screen-camera" class="hidden text-center w-full max-w-2xl">
+    <div class="relative">
+     <video id="video" playsinline class="w-full rounded-2xl shadow-2xl" style="transform: scaleX(-1); background: #000;"></video>
+     <canvas id="canvas" class="hidden"></canvas>
+     <div id="flash" class="hidden absolute inset-0 bg-white rounded-2xl pointer-events-none"></div>
+     <div id="countdown-overlay" class="hidden absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl">
+      <div class="text-center">
+       <p id="ready-msg" class="text-pink-300 text-xl mb-2">Get ready!</p><span id="countdown-num" class="text-8xl font-bold text-white countdown-pop">30</span>
+      </div>
+     </div>
+    </div>
+    <div class="mt-4 flex items-center justify-between">
+     <p id="photo-status" class="text-white text-lg font-medium">Photo <span id="photo-current">1</span> of 4</p>
+     <div id="photo-dots" class="flex gap-2">
+      <div class="w-4 h-4 rounded-full bg-gray-600" id="dot-0"></div>
+      <div class="w-4 h-4 rounded-full bg-gray-600" id="dot-1"></div>
+      <div class="w-4 h-4 rounded-full bg-gray-600" id="dot-2"></div>
+      <div class="w-4 h-4 rounded-full bg-gray-600" id="dot-3"></div>
+     </div>
+    </div>
+   </div><!-- Frame Selection Screen -->
+   <div id="screen-frames" class="hidden text-center w-full max-w-4xl">
+    <h2 class="text-3xl font-bold text-white mb-6">Choose Your Frame</h2>
+    <div id="frames-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"></div>
+   </div><!-- Result Screen -->
+   <div id="screen-result" class="hidden text-center w-full max-w-3xl">
+    <h2 class="text-3xl font-bold text-white mb-6">Your Photos!</h2>
+    <div id="photo-strip" class="grid grid-cols-2 gap-3 mb-6"></div>
+    <div id="email-section" class="bg-white/10 backdrop-blur rounded-2xl p-6 max-w-md mx-auto">
+     <p class="text-white text-lg mb-3">Send photos to your email</p>
+     <form onsubmit="sendEmail(event)" class="flex flex-col gap-3">
+      <label for="email-input" class="sr-only">Email address</label> <input id="email-input" type="email" placeholder="your@email.com" required class="px-4 py-3 rounded-full bg-white/20 text-white placeholder-white/50 border border-white/20 focus:border-pink-400 focus:outline-none"> <button type="submit" id="send-btn" class="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-full hover:scale-105 transition-transform"> <i data-lucide="send" class="w-4 h-4 inline mr-2"></i>Send Photos </button>
+     </form>
+     <p id="email-status" class="mt-3 text-sm hidden"></p>
+    </div><button onclick="restart()" class="mt-6 px-6 py-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition"> <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-2"></i>Take New Photos </button>
+   </div>
+  </div>
+  <script>
+  let stream = null;
+  let photos = [];
+  let currentPhoto = 0;
+  let selectedFrame = 0;
+  let countdownInterval = null;
+
+  const defaultConfig = {
+    booth_title: 'Party Photobooth',
+    countdown_message: 'Get ready!',
+    frame1_url: '',
+    frame1_name: '✨ Gold Glam',
+    frame2_url: '',
+    frame2_name: '💚 Neon Glow',
+    frame3_url: '',
+    frame3_name: '🎬 Retro Pop',
+    background_color: '#1a1a2e',
+    primary_color: '#ec4899',
+    text_color: '#ffffff',
+    font_family: 'Fredoka',
+    font_size: 16
+  };
+
+  let customFrames = [
+    { url: '', name: '✨ Gold Glam' },
+    { url: '', name: '💚 Neon Glow' },
+    { url: '', name: '🎬 Retro Pop' }
+  ];
+
+  function applyConfig(config) {
+    const title = document.getElementById('title-text');
+    const readyMsg = document.getElementById('ready-msg');
+    if (title) title.textContent = config.booth_title || defaultConfig.booth_title;
+    if (readyMsg) readyMsg.textContent = config.countdown_message || defaultConfig.countdown_message;
+
+    customFrames[0] = { 
+      url: config.frame1_url || defaultConfig.frame1_url, 
+      name: config.frame1_name || defaultConfig.frame1_name 
+    };
+    customFrames[1] = { 
+      url: config.frame2_url || defaultConfig.frame2_url, 
+      name: config.frame2_name || defaultConfig.frame2_name 
+    };
+    customFrames[2] = { 
+      url: config.frame3_url || defaultConfig.frame3_url, 
+      name: config.frame3_name || defaultConfig.frame3_name 
+    };
+
+    const font = config.font_family || defaultConfig.font_family;
+    document.body.style.fontFamily = `${font}, Fredoka, sans-serif`;
+
+    const baseSize = config.font_size || defaultConfig.font_size;
+    if (title) title.style.fontSize = `${baseSize * 2.5}px`;
+  }
+
+  async function startBooth() {
+    photos = [];
+    currentPhoto = 0;
+    
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      
+      showScreen('camera');
+      
+      video.addEventListener('loadedmetadata', () => {
+        updateDots();
+        startCountdown();
+      }, { once: true });
+      
+      video.play().catch(err => console.error('Video play failed:', err));
+      
+    } catch (error) {
+      console.error('Camera error:', error);
+      showCameraError(error);
+    }
+  }
+
+  function showCameraError(error) {
+    const existing = document.getElementById('camera-error');
+    if (existing) existing.remove();
+
+    let errorMsg = '';
+    let troubleshooting = '';
+
+    if (error.name === 'NotAllowedError') {
+      errorMsg = 'Camera access was denied.';
+      troubleshooting = `
+        <div class="space-y-3 text-left mb-6">
+          <div class="bg-white/5 rounded-lg p-3">
+            <p class="text-white font-semibold mb-1">📱 iPhone/iPad:</p>
+            <p class="text-sm text-gray-300">Settings > Safari > Camera > Allow this website</p>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3">
+            <p class="text-white font-semibold mb-1">🖥️ Mac (Chrome/Firefox):</p>
+            <p class="text-sm text-gray-300">Address bar: Click camera icon > Allow</p>
+          </div>
+          <div class="bg-white/5 rounded-lg p-3">
+            <p class="text-white font-semibold mb-1">🖥️ Windows (Chrome/Firefox):</p>
+            <p class="text-sm text-gray-300">Address bar: Click camera icon > Allow</p>
+          </div>
+        </div>
+      `;
+    } else if (error.name === 'NotFoundError') {
+      errorMsg = 'No camera found on this device.';
+      troubleshooting = `<p class="text-gray-300 text-sm mb-6">Check that your device has a working camera.</p>`;
+    } else if (error.name === 'NotReadableError') {
+      errorMsg = 'Camera is in use by another app.';
+      troubleshooting = `<p class="text-gray-300 text-sm mb-6">Close other apps using the camera and try again.</p>`;
+    } else if (error.name === 'SecurityError') {
+      errorMsg = 'Camera access requires a secure connection.';
+      troubleshooting = `<p class="text-gray-300 text-sm mb-6">Make sure you\'re accessing this from an HTTPS URL.</p>`;
+    } else {
+      errorMsg = 'Could not access camera.';
+      troubleshooting = `<p class="text-gray-300 text-sm mb-6">${error.message || 'Try refreshing and allowing camera access.'}</p>`;
+    }
+
+    const div = document.createElement('div');
+    div.id = 'camera-error';
+    div.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4';
+    div.innerHTML = `
+      <div class="bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] rounded-2xl p-6 max-w-md text-center border border-red-500/30">
+        <h3 class="text-2xl font-bold text-white mb-2">📷 Camera Access</h3>
+        <p class="text-red-300 mb-6 font-medium">${errorMsg}</p>
+        ${troubleshooting}
+        <div class="flex gap-3">
+          <button onclick="document.getElementById('camera-error').remove(); showScreen('start')" class="flex-1 px-4 py-2 bg-white/10 text-white rounded-full hover:bg-white/20 transition font-medium">
+            Back
+          </button>
+          <button onclick="document.getElementById('camera-error').remove(); startBooth()" class="flex-1 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-full hover:scale-105 transition font-medium">
+            Try Again
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(div);
+  }
+
+  function startCountdown() {
+    let seconds = currentPhoto === 0 ? 5 : 30;
+    const overlay = document.getElementById('countdown-overlay');
+    const numEl = document.getElementById('countdown-num');
+    overlay.classList.remove('hidden');
+    numEl.textContent = seconds;
+
+    countdownInterval = setInterval(() => {
+      seconds--;
+      numEl.textContent = seconds;
+      numEl.classList.remove('countdown-pop');
+      void numEl.offsetWidth;
+      numEl.classList.add('countdown-pop');
+
+      if (seconds <= 0) {
+        clearInterval(countdownInterval);
+        overlay.classList.add('hidden');
+        takePhoto();
+      }
+    }, 1000);
+  }
+
+  function takePhoto() {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const flash = document.getElementById('flash');
+    flash.classList.remove('hidden');
+    flash.classList.add('flash-overlay');
+    setTimeout(() => { flash.classList.add('hidden'); flash.classList.remove('flash-overlay'); }, 300);
+
+    photos.push(canvas.toDataURL('image/jpeg', 0.9));
+    currentPhoto++;
+    updateDots();
+
+    if (currentPhoto >= 4) {
+      setTimeout(() => {
+        stopCamera();
+        showFrameSelection();
+      }, 500);
+    } else {
+      document.getElementById('photo-current').textContent = currentPhoto + 1;
+      startCountdown();
+    }
+  }
+
+  function updateDots() {
+    for (let i = 0; i < 4; i++) {
+      const dot = document.getElementById(`dot-${i}`);
+      dot.className = `w-4 h-4 rounded-full ${i < currentPhoto ? 'bg-pink-500' : i === currentPhoto ? 'bg-white pulse-ring' : 'bg-gray-600'}`;
+    }
+  }
+
+  function stopCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  }
+
+  function showFrameSelection() {
+    showScreen('frames');
+    renderFrameOptions();
+  }
+
+  function renderFrameOptions() {
+    const grid = document.getElementById('frames-grid');
+    grid.innerHTML = '';
+    customFrames.forEach((frame, i) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.onclick = () => selectFrame(i);
+      button.className = 'frame-option p-2 rounded-xl bg-white/5 hover:bg-white/10 transition border-2 border-transparent hover:border-pink-400';
+      
+      const frameContent = frame.url 
+        ? `<img src="${frame.url}" class="absolute inset-0 w-full h-full object-cover pointer-events-none" alt="Frame" loading="lazy" onerror="console.error('Frame image failed'); this.style.display='none';">`
+        : '<p class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">No frame</p>';
+      
+      button.innerHTML = `
+        <div class="aspect-[3/4] bg-gray-800 rounded overflow-hidden flex items-center justify-center relative">
+          <img src="${photos[0]}" class="w-full h-full object-cover" alt="Photo preview">
+          ${frameContent}
+        </div>
+        <p class="text-pink-300 mt-2 font-semibold">${frame.name}</p>
+      `;
+      grid.appendChild(button);
+    });
+  }
+
+  function selectFrame(frameIndex) {
+    selectedFrame = frameIndex;
+    showResult();
+  }
+
+  function showResult() {
+    const strip = document.getElementById('photo-strip');
+    strip.innerHTML = '';
+    const selectedFrameData = customFrames[selectedFrame];
+    
+    photos.forEach((src, i) => {
+      const div = document.createElement('div');
+      div.className = 'relative aspect-[3/4] rounded overflow-hidden';
+      
+      if (selectedFrameData.url) {
+        div.innerHTML = `
+          <img src="${src}" class="w-full h-full object-cover" alt="Photo ${i+1}">
+          <img src="${selectedFrameData.url}" class="absolute inset-0 w-full h-full object-cover pointer-events-none" alt="Frame" loading="lazy" onerror="console.error('Frame overlay failed');">
+        `;
+      } else {
+        div.innerHTML = `<img src="${src}" class="w-full h-full object-cover" alt="Photo ${i+1}">`;
+      }
+      strip.appendChild(div);
+    });
+    showScreen('result');
+    lucide.createIcons();
+  }
+
+  function sendEmail(e) {
+    e.preventDefault();
+    const email = document.getElementById('email-input').value;
+    const btn = document.getElementById('send-btn');
+    const status = document.getElementById('email-status');
+
+    btn.disabled = true;
+    btn.textContent = 'Preparing...';
+
+    const combined = document.createElement('canvas');
+    const size = 400;
+    combined.width = size * 2 + 30;
+    combined.height = size * 2 + 30;
+    const ctx = combined.getContext('2d');
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, combined.width, combined.height);
+
+    let loaded = 0;
+    const selectedFrameData = customFrames[selectedFrame];
+
+    photos.forEach((src, i) => {
+      const img = new Image();
+      img.onload = () => {
+        const x = (i % 2) * (size + 10) + 10;
+        const y = Math.floor(i / 2) * (size + 10) + 10;
+        ctx.drawImage(img, x, y, size, size);
+        
+        if (selectedFrameData.url) {
+          const frameImg = new Image();
+          frameImg.onload = () => {
+            ctx.drawImage(frameImg, x, y, size, size);
+            loaded++;
+            if (loaded === 4) finalizeEmail();
+          };
+          frameImg.onerror = () => {
+            loaded++;
+            if (loaded === 4) finalizeEmail();
+          };
+          frameImg.src = selectedFrameData.url;
+        } else {
+          loaded++;
+          if (loaded === 4) finalizeEmail();
+        }
+      };
+      img.src = src;
+    });
+
+    function finalizeEmail() {
+      const dataUrl = combined.toDataURL('image/jpeg', 0.9);
+      const subject = encodeURIComponent('My Party Photobooth Photos! 📸');
+      const body = encodeURIComponent('Here are my photobooth pics from the party! 🎉\n\n(Photos are downloading to your device - attach them to this email!)');
+      
+      const link = document.createElement('a');
+      link.download = 'photobooth-strip.jpg';
+      link.href = dataUrl;
+      link.click();
+
+      window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="send" class="w-4 h-4 inline mr-2"></i>Send Photos';
+      status.classList.remove('hidden');
+      status.className = 'mt-3 text-sm text-green-300';
+      status.textContent = '✅ Photos downloaded! Attach them to the email that just opened.';
+      lucide.createIcons();
+    }
+  }
+
+  function restart() {
+    photos = [];
+    currentPhoto = 0;
+    selectedFrame = 0;
+    document.getElementById('photo-current').textContent = '1';
+    document.getElementById('email-status').classList.add('hidden');
+    document.getElementById('email-input').value = '';
+    showScreen('start');
+  }
+
+  function showScreen(name) {
+    ['start', 'camera', 'frames', 'result'].forEach(s => {
+      document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
+    });
+  }
+
+  applyConfig(defaultConfig);
+  lucide.createIcons();
+  </script>
+ </body>
+</html>
