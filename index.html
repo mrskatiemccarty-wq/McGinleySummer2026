@@ -385,13 +385,13 @@
       button.className = 'frame-option p-2 rounded-xl bg-white/5 hover:bg-white/10 transition border-2 border-transparent hover:border-pink-400';
       
       const frameContent = frame.url 
-        ? `<img src="${frame.url}" class="absolute inset-0 w-full h-full object-cover pointer-events-none" alt="Frame" loading="lazy" onerror="console.error('Frame image failed'); this.style.display='none';">`
-        : '<p class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">No frame</p>';
+        ? `<img src="${frame.url}" class="absolute inset-0 w-full h-full object-cover pointer-events-none" alt="Frame" loading="lazy" style="z-index: -1;" onerror="console.error('Frame image failed'); this.style.display='none';">`
+        : '<p class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm" style="z-index: -1;">No frame</p>';
       
       button.innerHTML = `
         <div class="aspect-[3/4] bg-gray-800 rounded overflow-hidden flex items-center justify-center relative">
-          <img src="${photos[0]}" class="w-full h-full object-cover" alt="Photo preview">
           ${frameContent}
+          <img src="${photos[0]}" class="w-full h-full object-cover" alt="Photo preview" style="z-index: 1;">
         </div>
         <p class="text-pink-300 mt-2 font-semibold">${frame.name}</p>
       `;
@@ -415,8 +415,8 @@
       
       if (selectedFrameData.url) {
         div.innerHTML = `
-          <img src="${src}" class="w-full h-full object-cover" alt="Photo ${i+1}">
-          <img src="${selectedFrameData.url}" class="absolute inset-0 w-full h-full object-cover pointer-events-none" alt="Frame" loading="lazy" onerror="console.error('Frame overlay failed');">
+          <img src="${selectedFrameData.url}" class="absolute inset-0 w-full h-full object-cover pointer-events-none" alt="Frame" loading="lazy" onerror="console.error('Frame overlay failed');" style="z-index: 0;">
+          <img src="${src}" class="relative w-full h-full object-cover" alt="Photo ${i+1}" style="z-index: 1;">
         `;
       } else {
         div.innerHTML = `<img src="${src}" class="w-full h-full object-cover" alt="Photo ${i+1}">`;
@@ -442,27 +442,40 @@
 
     let loaded = 0;
     const selectedFrameData = customFrames[selectedFrame];
+    let imagesLoaded = 0;
+    const totalImages = selectedFrameData.url ? 8 : 4; // 4 photos + 4 frames if frame exists
 
     photos.forEach((src, i) => {
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onload = () => {
         const x = (i % 2) * (size + 10) + 10;
         const y = Math.floor(i / 2) * (size + 10) + 10;
-        ctx.drawImage(img, x, y, size, size);
         
+        // Draw frame first (behind)
         if (selectedFrameData.url) {
           const frameImg = new Image();
+          frameImg.crossOrigin = 'anonymous';
           frameImg.onload = () => {
             ctx.drawImage(frameImg, x, y, size, size);
-            loaded++;
+            // Draw photo on top
+            ctx.drawImage(img, x, y, size, size);
+            imagesLoaded++;
           };
           frameImg.onerror = () => {
-            loaded++;
+            // Draw just the photo if frame fails to load
+            ctx.drawImage(img, x, y, size, size);
+            imagesLoaded++;
           };
           frameImg.src = selectedFrameData.url;
         } else {
-          loaded++;
+          // No frame, just draw photo
+          ctx.drawImage(img, x, y, size, size);
+          imagesLoaded++;
         }
+      };
+      img.onerror = () => {
+        imagesLoaded++;
       };
       img.src = src;
     });
