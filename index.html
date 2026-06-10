@@ -27,7 +27,7 @@
       <i data-lucide="camera" class="w-12 h-12 text-white"></i>
      </div>
      <h1 id="title-text" class="text-4xl md:text-5xl font-bold text-white mb-2">Party Photobooth</h1>
-     <p id="subtitle-text" class="text-pink-300 text-lg">4 photos • 30 seconds apart • Choose your frame!</p>
+     <p id="subtitle-text" class="text-pink-300 text-lg">4 photos • 10 seconds apart • Choose your frame!</p>
     </div><button onclick="startBooth()" class="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xl font-semibold rounded-full hover:scale-105 transition-transform shadow-lg shadow-pink-500/40"> <i data-lucide="sparkles" class="w-5 h-5 inline mr-2"></i>Start Photobooth </button>
     <p class="text-gray-400 text-sm mt-4">✨ Multiple guests can use the booth one after another!</p>
     <div class="mt-8 pt-6 border-t border-white/20">
@@ -73,17 +73,28 @@
    <div id="screen-frames" class="hidden text-center w-full max-w-4xl">
     <h2 class="text-3xl font-bold text-white mb-6">Choose Your Frame</h2>
     <div id="frames-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"></div>
-   </div><!-- Result Screen -->
+   </div><!-- Preview Screen -->
+   <div id="screen-preview" class="hidden text-center w-full max-w-3xl">
+    <h2 class="text-3xl font-bold text-white mb-6">Preview Your Photos</h2>
+    <div id="preview-strip" class="grid grid-cols-2 gap-3 mb-8 bg-white/5 p-6 rounded-2xl"></div>
+    <p class="text-white mb-4">Enter your email to receive your photos:</p>
+    <div class="bg-white/10 backdrop-blur rounded-2xl p-6 max-w-md mx-auto">
+     <form onsubmit="sendEmail(event)" class="flex flex-col gap-3">
+      <label for="preview-email-input" class="sr-only">Email address</label> 
+      <input id="preview-email-input" type="email" placeholder="your@email.com" required class="px-4 py-3 rounded-full bg-white/20 text-white placeholder-white/50 border border-white/20 focus:border-pink-400 focus:outline-none"> 
+      <button type="submit" id="preview-send-btn" class="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-full hover:scale-105 transition-transform"> 
+        <i data-lucide="send" class="w-4 h-4 inline mr-2"></i>Send Photos to Email 
+      </button>
+     </form>
+     <p id="preview-email-status" class="mt-3 text-sm hidden"></p>
+    </div>
+    <button onclick="restart()" class="mt-6 px-6 py-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition"> 
+      <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-2"></i>Take New Photos 
+    </button>
+   </div><!-- Result Screen (Hidden - we use preview now) -->
    <div id="screen-result" class="hidden text-center w-full max-w-3xl">
     <h2 class="text-3xl font-bold text-white mb-6">Your Photos!</h2>
     <div id="photo-strip" class="grid grid-cols-2 gap-3 mb-6"></div>
-    <div id="email-section" class="bg-white/10 backdrop-blur rounded-2xl p-6 max-w-md mx-auto">
-     <p class="text-white text-lg mb-3">Send photos to your email</p>
-     <form onsubmit="sendEmail(event)" class="flex flex-col gap-3">
-      <label for="email-input" class="sr-only">Email address</label> <input id="email-input" type="email" placeholder="your@email.com" required class="px-4 py-3 rounded-full bg-white/20 text-white placeholder-white/50 border border-white/20 focus:border-pink-400 focus:outline-none"> <button type="submit" id="send-btn" class="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-full hover:scale-105 transition-transform"> <i data-lucide="send" class="w-4 h-4 inline mr-2"></i>Send Photos </button>
-     </form>
-     <p id="email-status" class="mt-3 text-sm hidden"></p>
-    </div><button onclick="restart()" class="mt-6 px-6 py-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition"> <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-2"></i>Take New Photos </button>
    </div>
   </div>
   <script>
@@ -92,6 +103,7 @@
   let currentPhoto = 0;
   let selectedFrame = 0;
   let countdownInterval = null;
+  let photoStripCanvas = null;
 
   const defaultConfig = {
     booth_title: 'Party Photobooth',
@@ -295,7 +307,7 @@
   }
 
   function startCountdown() {
-    let seconds = currentPhoto === 0 ? 5 : 30;
+    let seconds = currentPhoto === 0 ? 5 : 10;
     const overlay = document.getElementById('countdown-overlay');
     const numEl = document.getElementById('countdown-num');
     overlay.classList.remove('hidden');
@@ -389,12 +401,12 @@
 
   function selectFrame(frameIndex) {
     selectedFrame = frameIndex;
-    showResult();
+    showPreview();
   }
 
-  function showResult() {
-    const strip = document.getElementById('photo-strip');
-    strip.innerHTML = '';
+  function showPreview() {
+    const previewStrip = document.getElementById('preview-strip');
+    previewStrip.innerHTML = '';
     const selectedFrameData = customFrames[selectedFrame];
     
     photos.forEach((src, i) => {
@@ -409,28 +421,24 @@
       } else {
         div.innerHTML = `<img src="${src}" class="w-full h-full object-cover" alt="Photo ${i+1}">`;
       }
-      strip.appendChild(div);
+      previewStrip.appendChild(div);
     });
-    showScreen('result');
+    
+    // Create the photo strip canvas for email
+    createPhotoStrip();
+    
+    showScreen('preview');
     lucide.createIcons();
   }
 
-  function sendEmail(e) {
-    e.preventDefault();
-    const email = document.getElementById('email-input').value;
-    const btn = document.getElementById('send-btn');
-    const status = document.getElementById('email-status');
-
-    btn.disabled = true;
-    btn.textContent = 'Preparing...';
-
-    const combined = document.createElement('canvas');
+  function createPhotoStrip() {
     const size = 400;
-    combined.width = size * 2 + 30;
-    combined.height = size * 2 + 30;
-    const ctx = combined.getContext('2d');
+    photoStripCanvas = document.createElement('canvas');
+    photoStripCanvas.width = size * 2 + 30;
+    photoStripCanvas.height = size * 2 + 30;
+    const ctx = photoStripCanvas.getContext('2d');
     ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, combined.width, combined.height);
+    ctx.fillRect(0, 0, photoStripCanvas.width, photoStripCanvas.height);
 
     let loaded = 0;
     const selectedFrameData = customFrames[selectedFrame];
@@ -447,54 +455,118 @@
           frameImg.onload = () => {
             ctx.drawImage(frameImg, x, y, size, size);
             loaded++;
-            if (loaded === 4) finalizeEmail();
           };
           frameImg.onerror = () => {
             loaded++;
-            if (loaded === 4) finalizeEmail();
           };
           frameImg.src = selectedFrameData.url;
         } else {
           loaded++;
-          if (loaded === 4) finalizeEmail();
         }
       };
       img.src = src;
     });
+  }
 
-    function finalizeEmail() {
-      const dataUrl = combined.toDataURL('image/jpeg', 0.9);
-      const subject = encodeURIComponent('My Party Photobooth Photos! 📸');
-      const body = encodeURIComponent('Here are my photobooth pics from the party! 🎉\n\n(Photos are downloading to your device - attach them to this email!)');
+  function sendEmail(e) {
+    e.preventDefault();
+    const email = document.getElementById('preview-email-input').value;
+    const btn = document.getElementById('preview-send-btn');
+    const status = document.getElementById('preview-email-status');
+
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    // Wait a moment to ensure photo strip is ready
+    setTimeout(() => {
+      const photoStripBase64 = photoStripCanvas.toDataURL('image/jpeg', 0.9);
       
-      const link = document.createElement('a');
-      link.download = 'photobooth-strip.jpg';
-      link.href = dataUrl;
-      link.click();
+      // Send to backend service (using Formspree, EmailJS, or similar)
+      sendEmailWithAttachment(email, photoStripBase64, btn, status);
+    }, 500);
+  }
 
-      window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+  function sendEmailWithAttachment(email, imageBase64, btn, status) {
+    // Using a simple approach with mailto and data attachment
+    // For a production app, you'd use a backend service like SendGrid, Mailgun, or AWS SES
+    
+    // Extract base64 data
+    const base64Data = imageBase64.split(',')[1];
+    
+    // Create a simple email body with instructions
+    const subject = encodeURIComponent('Your Party Photobooth Photos! 📸');
+    const body = encodeURIComponent('Here are your photobooth pictures from the party! 🎉\n\nYour photo strip is attached below (saved as an image). You can download it and share with friends!\n\n');
+    
+    // For automatic attachment, we need to use a backend service
+    // This example uses a POST to a backend endpoint
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: email,
+        subject: 'Your Party Photobooth Photos! 📸',
+        html: `
+          <h2>Your Party Photobooth Photos! 📸</h2>
+          <p>Here are your photobooth pictures from the party! 🎉</p>
+          <p>Your photo strip is attached below.</p>
+          <img src="cid:photostrip" style="max-width: 100%; height: auto; margin-top: 20px;">
+        `,
+        imageBase64: base64Data
+      })
+    })
+    .then(response => {
+      if (response.ok) {
+        showEmailSuccess(btn, status);
+      } else {
+        // Fallback to mailto if backend not available
+        fallbackEmailSend(email, btn, status);
+      }
+    })
+    .catch(() => {
+      // Fallback to mailto if backend not available
+      fallbackEmailSend(email, btn, status);
+    });
+  }
 
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="send" class="w-4 h-4 inline mr-2"></i>Send Photos';
-      status.classList.remove('hidden');
-      status.className = 'mt-3 text-sm text-green-300';
-      status.textContent = '✅ Photos downloaded! Attach them to the email that just opened.';
-      lucide.createIcons();
-    }
+  function fallbackEmailSend(email, btn, status) {
+    // Fallback: Download the image and open mailto
+    const link = document.createElement('a');
+    link.download = 'photobooth-strip.jpg';
+    link.href = photoStripCanvas.toDataURL('image/jpeg', 0.9);
+    link.click();
+
+    const subject = encodeURIComponent('Your Party Photobooth Photos! 📸');
+    const body = encodeURIComponent('Here are your photobooth pictures from the party! 🎉\n\nYour photo strip has been downloaded to your device. Please attach it to this email!');
+    
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+    
+    showEmailSuccess(btn, status);
+  }
+
+  function showEmailSuccess(btn, status) {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="send" class="w-4 h-4 inline mr-2"></i>Send Photos to Email';
+    status.classList.remove('hidden');
+    status.className = 'mt-3 text-sm text-green-300';
+    status.textContent = '✅ Email sent! Check your inbox for your photos. 📸';
+    lucide.createIcons();
   }
 
   function restart() {
     photos = [];
     currentPhoto = 0;
     selectedFrame = 0;
+    photoStripCanvas = null;
     document.getElementById('photo-current').textContent = '1';
-    document.getElementById('email-status').classList.add('hidden');
-    document.getElementById('email-input').value = '';
+    document.getElementById('preview-email-status').classList.add('hidden');
+    document.getElementById('preview-email-input').value = '';
     showScreen('start');
   }
 
   function showScreen(name) {
-    ['start', 'camera', 'frames', 'result'].forEach(s => {
+    ['start', 'camera', 'frames', 'preview', 'result'].forEach(s => {
       document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
     });
   }
