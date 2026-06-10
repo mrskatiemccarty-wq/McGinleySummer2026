@@ -30,6 +30,24 @@
      <p id="subtitle-text" class="text-pink-300 text-lg">4 photos • 30 seconds apart • Choose your frame!</p>
     </div><button onclick="startBooth()" class="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xl font-semibold rounded-full hover:scale-105 transition-transform shadow-lg shadow-pink-500/40"> <i data-lucide="sparkles" class="w-5 h-5 inline mr-2"></i>Start Photobooth </button>
     <p class="text-gray-400 text-sm mt-4">✨ Multiple guests can use the booth one after another!</p>
+    <div class="mt-8 pt-6 border-t border-white/20">
+     <p class="text-white font-semibold mb-4">Upload Custom Frame Overlays</p>
+     <div class="flex flex-col gap-3 max-w-md mx-auto">
+      <div class="flex items-center gap-2">
+       <label class="text-white text-sm">Frame 1:</label>
+       <input type="file" id="frame-upload-1" accept="image/*" onchange="uploadFrame(1)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+      </div>
+      <div class="flex items-center gap-2">
+       <label class="text-white text-sm">Frame 2:</label>
+       <input type="file" id="frame-upload-2" accept="image/*" onchange="uploadFrame(2)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+      </div>
+      <div class="flex items-center gap-2">
+       <label class="text-white text-sm">Frame 3:</label>
+       <input type="file" id="frame-upload-3" accept="image/*" onchange="uploadFrame(3)" class="flex-1 text-sm text-white/70 file:mr-2 file:px-3 file:py-1 file:rounded-full file:bg-pink-500/30 file:text-pink-300 file:border-0 file:cursor-pointer hover:file:bg-pink-500/50">
+      </div>
+     </div>
+     <button onclick="clearFrames()" class="mt-3 px-4 py-2 text-sm bg-white/10 text-white rounded-full hover:bg-white/20 transition">Clear All Uploads</button>
+    </div>
    </div><!-- Camera Screen -->
    <div id="screen-camera" class="hidden text-center w-full max-w-2xl">
     <div class="relative">
@@ -96,6 +114,75 @@
     { url: '', name: '💚 Neon Glow' },
     { url: '', name: '🎬 Retro Pop' }
   ];
+
+  // Load saved frames from localStorage on page load
+  function loadSavedFrames() {
+    const saved = localStorage.getItem('photoboothFrames');
+    if (saved) {
+      try {
+        customFrames = JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to load saved frames:', e);
+      }
+    }
+  }
+
+  // Save frames to localStorage
+  function saveFrames() {
+    localStorage.setItem('photoboothFrames', JSON.stringify(customFrames));
+  }
+
+  function uploadFrame(frameIndex) {
+    const input = document.getElementById(`frame-upload-${frameIndex}`);
+    const file = input.files[0];
+    
+    if (!file) return;
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      input.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      customFrames[frameIndex - 1].url = e.target.result;
+      saveFrames();
+      showUploadSuccess(frameIndex);
+    };
+    reader.onerror = () => {
+      alert('Failed to read file');
+      input.value = '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function showUploadSuccess(frameIndex) {
+    const input = document.getElementById(`frame-upload-${frameIndex}`);
+    const originalClass = input.className;
+    input.className = originalClass.replace('file:bg-pink-500/30', 'file:bg-green-500/50');
+    input.parentElement.style.opacity = '0.8';
+    
+    setTimeout(() => {
+      input.className = originalClass;
+      input.parentElement.style.opacity = '1';
+    }, 1000);
+  }
+
+  function clearFrames() {
+    if (confirm('Are you sure you want to clear all uploaded frames?')) {
+      customFrames = [
+        { url: '', name: '✨ Gold Glam' },
+        { url: '', name: '💚 Neon Glow' },
+        { url: '', name: '🎬 Retro Pop' }
+      ];
+      document.getElementById('frame-upload-1').value = '';
+      document.getElementById('frame-upload-2').value = '';
+      document.getElementById('frame-upload-3').value = '';
+      saveFrames();
+    }
+  }
 
   function applyConfig(config) {
     const title = document.getElementById('title-text');
@@ -412,6 +499,8 @@
     });
   }
 
+  // Initialize on page load
+  loadSavedFrames();
   applyConfig(defaultConfig);
   lucide.createIcons();
   </script>
